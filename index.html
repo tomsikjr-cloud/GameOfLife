@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Draw, play, and explore Conway's Game of Life, offline in your browser.">
+<title>Conway's Game of Life</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;color:#e4ece7;background:#101713}*{box-sizing:border-box}body{margin:0;padding:32px 20px}main{max-width:1000px;margin:auto}header{margin-bottom:24px}.eyebrow{color:#a9ca81;font:12px monospace;letter-spacing:.18em;text-transform:uppercase}h1{font-size:clamp(28px,5vw,44px);letter-spacing:-.04em;margin:10px 0;font-weight:600}p{color:#a9bab0;line-height:1.6}.panel{border:1px solid #35453a;border-radius:16px;overflow:hidden;background:#17221b}.stats,.controls,.speed{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.stats{justify-content:space-between;padding:16px 20px;font:13px monospace;color:#b9cbbf}.stats strong{color:#e4ece7}#status{color:#c1e295}.board-wrap{padding:0 16px}canvas{display:block;width:100%;height:auto;aspect-ratio:3/2;background:#111c16;touch-action:none;cursor:crosshair}.controls{padding:18px 20px 12px}button,select{font:14px system-ui;border:1px solid #536759;border-radius:8px;color:#e4ece7;background:#25382c;padding:10px 14px;cursor:pointer}button:hover:not(:disabled),select:hover{background:#354c3c}button:disabled{opacity:.4;cursor:default}#start{background:#c0e793;color:#192710;border-color:#c0e793;font-weight:650}#start:hover:not(:disabled){background:#d2f4ac}:focus-visible{outline:3px solid #f0cd78;outline-offset:3px}.speed{padding:8px 20px 20px;font-size:14px;color:#c2d1c7}input{accent-color:#c0e793;max-width:160px}.hint{font-size:13px;margin:0 0 20px;padding:0 20px}details{margin:24px 0;color:#a9bab0;font-size:14px;line-height:1.7}summary{color:#d9e6dd;cursor:pointer}footer{font:12px monospace;color:#9aafa0}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}@media(max-width:540px){body{padding:20px 10px}.stats{gap:12px;padding:14px}.board-wrap{padding:0 8px}.controls,.speed{padding-left:12px;padding-right:12px}button,select{padding:10px}}
+</style>
+</head>
+<body><main>
+<header><div class="eyebrow">A small world of simple rules</div><h1>Conway's Game of Life</h1><p>Draw a few cells. Press Start. See what grows.</p></header>
+<section class="panel" aria-label="Simulation">
+<div class="stats"><span id="status" role="status">Paused</span><span>Generation <strong id="generation">0</strong></span><span>Living <strong id="population">0</strong></span><span>60 × 40 · wrapping edges</span></div>
+<div class="board-wrap"><canvas id="board" width="960" height="640" tabindex="0" aria-label="Game of Life grid. Arrow keys select a cell; Space or Enter toggles it while paused." aria-describedby="instructions">This simulation requires Canvas support.</canvas></div>
+<div class="controls"><button id="start" type="button">Start</button><button id="stop" type="button" disabled>Stop</button><button id="back" type="button" disabled>Back</button><button id="forward" type="button">Forward</button><button id="clear" type="button">Clear</button><button id="random" type="button">Random</button><label for="pattern">Try a pattern</label><select id="pattern"><option value="">Choose…</option><option value="glider">Glider</option><option value="blinker">Blinker</option><option value="pulsar">Pulsar</option></select></div>
+<div class="speed"><label for="speed">Speed</label><button id="slower" type="button" aria-label="Slower">−</button><input id="speed" type="range" min="1" max="25" value="8"><button id="faster" type="button" aria-label="Faster">+</button><output id="speed-value" for="speed">8 gen/s</output></div>
+<p class="hint" id="instructions">While paused, click or tap to toggle a cell; drag to paint. Keyboard: focus the grid, use arrow keys to move, and Space or Enter to toggle.</p><span id="cell-status" class="sr-only" role="status"></span>
+</section>
+<details><summary>How does life work?</summary><p>Each cell has eight neighbors. A living cell survives with two or three neighbors. An empty cell comes alive with exactly three. All other cells die. Every cell updates at the same time, and opposite edges are neighbors.</p><p>Back restores the previous generation once. Editing clears that saved step. Clear, Random, and sample patterns reset the generation count. Playback stops when no cells remain; repeating patterns keep running.</p></details>
+<footer>Built for curiosity. No installation. No connection needed.</footer>
+<noscript><p>Please enable JavaScript to use the simulation.</p></noscript>
+</main>
+<script>
+'use strict';
+const WIDTH = 60, HEIGHT = 40;
+function nextGeneration(grid, width = WIDTH, height = HEIGHT) {
+  const next = new Uint8Array(grid.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let neighbors = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx || dy) neighbors += grid[((y + dy + height) % height) * width + (x + dx + width) % width];
+        }
+      }
+      const i = y * width + x;
+      next[i] = Number(neighbors === 3 || (grid[i] === 1 && neighbors === 2));
+    }
+  }
+  return next;
+}
+const $ = id => document.getElementById(id);
+const canvas = $('board'), ctx = canvas.getContext('2d');
+let grid = new Uint8Array(WIDTH * HEIGHT), previous = null;
+let generation = 0, running = false, timer = null, speed = 8;
+let pointer = null, lastCell = null, cursor = { x: 0, y: 0 }, keyboardFocus = false;
+function announceCell() { $('cell-status').textContent = `Row ${cursor.y + 1}, column ${cursor.x + 1}: ${grid[cursor.y * WIDTH + cursor.x] ? 'alive' : 'dead'}`; }
+function draw() {
+  const cw = canvas.width / WIDTH, ch = canvas.height / HEIGHT;
+  ctx.fillStyle = '#111c16'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#bce593';
+  for (let i = 0; i < grid.length; i++) if (grid[i]) ctx.fillRect((i % WIDTH) * cw + 1, Math.floor(i / WIDTH) * ch + 1, cw - 2, ch - 2);
+  ctx.strokeStyle = '#2b3d30'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let x = 0; x <= WIDTH; x++) { ctx.moveTo(x * cw, 0); ctx.lineTo(x * cw, canvas.height); }
+  for (let y = 0; y <= HEIGHT; y++) { ctx.moveTo(0, y * ch); ctx.lineTo(canvas.width, y * ch); }
+  ctx.stroke();
+  if (keyboardFocus) { ctx.strokeStyle = '#f0cd78'; ctx.lineWidth = 2; ctx.strokeRect(cursor.x * cw + 1, cursor.y * ch + 1, cw - 2, ch - 2); }
+  $('generation').textContent = generation;
+  $('population').textContent = grid.reduce((total, value) => total + value, 0);
+  $('status').textContent = running ? 'Running' : 'Paused';
+  for (const id of ['start', 'forward', 'clear', 'random', 'pattern']) $(id).disabled = running;
+  $('stop').disabled = !running; $('back').disabled = running || previous === null;
+}
+function advance() { previous = grid.slice(); grid = nextGeneration(grid); generation++; draw(); }
+function stop() { running = false; clearTimeout(timer); timer = null; draw(); }
+function tick() {
+  if (!running) return;
+  advance();
+  if (!grid.some(Boolean)) { stop(); $('status').textContent = 'No living cells'; return; }
+  timer = setTimeout(tick, 1000 / speed);
+}
+function reset(next) { if (running) return; grid = next; previous = null; generation = 0; $('pattern').value = ''; draw(); }
+function edit(index, value) { previous = null; grid[index] = value; draw(); }
+$('start').onclick = () => { if (running) return; pointer = null; lastCell = null; running = true; tick(); };
+$('stop').onclick = stop;
+$('forward').onclick = () => { if (!running) advance(); };
+$('back').onclick = () => { if (!running && previous !== null) { grid = previous; previous = null; generation = Math.max(0, generation - 1); draw(); } };
+$('clear').onclick = () => reset(new Uint8Array(WIDTH * HEIGHT));
+$('random').onclick = () => reset(Uint8Array.from({ length: WIDTH * HEIGHT }, () => Number(Math.random() < .28)));
+function changeSpeed(value) {
+  speed = Math.max(1, Math.min(25, Number(value)));
+  $('speed').value = speed; $('speed-value').textContent = `${speed} gen/s`;
+  $('slower').disabled = speed === 1; $('faster').disabled = speed === 25;
+  if (running) { clearTimeout(timer); timer = setTimeout(tick, 1000 / speed); }
+}
+$('speed').oninput = event => changeSpeed(event.target.value);
+$('slower').onclick = () => changeSpeed(speed - 1);
+$('faster').onclick = () => changeSpeed(speed + 1);
+const patterns = {
+  glider: ['.O.', '..O', 'OOO'], blinker: ['OOO'],
+  pulsar: ['..OOO...OOO..', '.............', 'O....O.O....O', 'O....O.O....O', 'O....O.O....O', '..OOO...OOO..', '.............', '..OOO...OOO..', 'O....O.O....O', 'O....O.O....O', 'O....O.O....O', '.............', '..OOO...OOO..']
+};
+$('pattern').onchange = event => {
+  const rows = patterns[event.target.value]; if (!rows || running) return;
+  const next = new Uint8Array(WIDTH * HEIGHT), left = Math.floor((WIDTH - rows[0].length) / 2), top = Math.floor((HEIGHT - rows.length) / 2);
+  rows.forEach((row, y) => [...row].forEach((cell, x) => { if (cell === 'O') next[(top + y) * WIDTH + left + x] = 1; }));
+  reset(next);
+};
+function cellAt(event) {
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((event.clientX - rect.left) * WIDTH / rect.width), y = Math.floor((event.clientY - rect.top) * HEIGHT / rect.height);
+  return x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT ? { x, y } : null;
+}
+canvas.addEventListener('pointerdown', event => {
+  if (running || event.button !== 0 || pointer !== null) return;
+  const cell = cellAt(event); if (!cell) return;
+  event.preventDefault(); canvas.focus(); keyboardFocus = false; cursor = cell;
+  pointer = event.pointerId; lastCell = cell; canvas.setPointerCapture(pointer);
+  const i = cell.y * WIDTH + cell.x; edit(i, 1 - grid[i]); announceCell();
+});
+canvas.addEventListener('pointermove', event => {
+  if (running || pointer !== event.pointerId) return;
+  const cell = cellAt(event); if (!cell) { lastCell = null; return; }
+  if (lastCell && cell.x === lastCell.x && cell.y === lastCell.y) return;
+  // Fill between pointer events so quick drags do not leave holes.
+  const from = lastCell || cell, steps = Math.max(Math.abs(cell.x - from.x), Math.abs(cell.y - from.y));
+  previous = null;
+  for (let i = 1; i <= Math.max(1, steps); i++) {
+    const t = steps ? i / steps : 1;
+    grid[Math.round(from.y + (cell.y - from.y) * t) * WIDTH + Math.round(from.x + (cell.x - from.x) * t)] = 1;
+  }
+  cursor = cell; lastCell = cell; draw(); announceCell();
+});
+for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(name, event => { if (event.pointerId === pointer) { pointer = null; lastCell = null; } });
+canvas.addEventListener('focus', () => { keyboardFocus = true; draw(); announceCell(); });
+canvas.addEventListener('blur', () => { keyboardFocus = false; draw(); });
+canvas.addEventListener('keydown', event => {
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter'].includes(event.key)) return;
+  event.preventDefault(); keyboardFocus = true;
+  if (event.key === 'ArrowLeft') cursor.x = (cursor.x + WIDTH - 1) % WIDTH;
+  if (event.key === 'ArrowRight') cursor.x = (cursor.x + 1) % WIDTH;
+  if (event.key === 'ArrowUp') cursor.y = (cursor.y + HEIGHT - 1) % HEIGHT;
+  if (event.key === 'ArrowDown') cursor.y = (cursor.y + 1) % HEIGHT;
+  if (!running && !event.repeat && [' ', 'Enter'].includes(event.key)) { const i = cursor.y * WIDTH + cursor.x; edit(i, 1 - grid[i]); }
+  draw(); announceCell();
+});
+draw();
+</script>
+</body>
+</html>

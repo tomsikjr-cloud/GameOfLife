@@ -1,78 +1,75 @@
 # Conway's Game of Life
 
-An interactive Python desktop simulation of Conway's Game of Life, built with Tkinter. Draw a starting pattern, generate a random board, or step through generations to explore how simple rules produce evolving patterns.
+An interactive browser simulation of Conway's Game of Life. Draw a starting pattern, generate a random board, or explore a glider, blinker, or pulsar.
 
-## Requirements
+**The primary version is now [`index.html`](index.html) at the repository root.** The original Python/Tkinter application is preserved unchanged in [`archive/python-v1/`](archive/python-v1/), together with its original documentation. This follows the root HTML / archived Python layout of SpaceDefense.
 
-- Python 3.6 or newer (the script uses f-strings).
-- Tkinter and a graphical desktop session.
+## Run locally
 
-The program uses only Python's standard library; no pip packages are required. To check that Tkinter is available, run:
+Download or clone this repository and open `index.html` in a modern browser. No build step, Python installation, package installation, or internet connection is required. HTML, CSS, JavaScript, and Canvas graphics are contained in that file, with no external assets or requests.
 
-```sh
-python -m tkinter
-```
-
-This should open a small test window. If Tkinter is missing, install the Tcl/Tk support provided by your Python distribution or operating system.
-
-## Run
-
-Download or clone this repository, open a terminal in its directory, and run:
+Optionally, serve the repository folder if you have Python 3 installed:
 
 ```sh
-python GameOfLife.py
+python -m http.server 8000 --bind 127.0.0.1
 ```
 
-On Windows, you can also use `py GameOfLife.py`. On systems where Python 3 is named `python3`, use `python3 GameOfLife.py`.
+Then open <http://localhost:8000/>. On systems where Python is named `python3`, use that command instead.
+
+## GitHub Pages / static hosting
+
+In this repository's **Settings → Pages**, select **Deploy from a branch**, choose **main** and **/(root)**, then save. After a successful deployment, the default project URL is <https://tomsikjr-cloud.github.io/GameOfLife/>. Adding the HTML file alone does not enable Pages; use the deployment status in Settings to confirm publication.
+
+See [GitHub's publishing-source documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site). The `.nojekyll` file bypasses Jekyll processing. For another static host, upload `index.html` as the site's entry point; no server-side runtime is needed.
 
 ## Controls
 
-The board starts empty. Draw a pattern or select **Random**, then press **Start**.
+The board starts empty. Draw a pattern, select **Random**, or choose a sample pattern, then press **Start**.
 
 | Control | Action |
 | --- | --- |
-| Left click | Toggle a cell between alive and dead while stopped. |
-| Left click and drag | Paint live cells while stopped. |
-| Start | Run the simulation continuously. |
-| Stop | Pause the simulation. |
-| Forward | Advance one generation while stopped. |
-| Back | Undo the most recent manual Forward step, once. |
-| Clear | Empty the board and reset the generation counter. |
-| Random | Generate a new board with approximately 28% live cells and reset the generation counter. |
-| Speed slider / < / > | Adjust the target speed from 1 to 25 generations per second, including while running. |
+| Click / tap | Toggle a cell while paused. |
+| Drag | Paint live cells while paused. |
+| Keyboard on the focused grid | Arrow keys move the highlighted cell; Space or Enter toggles it while paused. |
+| Start / Stop | Run or pause playback. |
+| Forward | Advance one generation while paused. |
+| Back | Restore the previous generation once, including after pausing playback. |
+| Clear | Empty the board and reset the generation count. |
+| Random | Reset with approximately 28% living cells. |
+| Try a pattern | Replace the board with a centered glider, blinker, or pulsar; reset the generation count. |
+| Speed slider / − / + | Set the target speed from 1 to 25 generations per second, including during playback. |
 
-The generation counter tracks simulation steps. Clear and Random reset it to zero; drawing on the board does not. Clicking to edit the board clears the saved Back step. Back is a single-step undo, not a full history, and is disabled during automatic playback.
+Editing clears the saved Back step without resetting the generation count. Back is a single-step undo, not a full history. Editing, Back, Forward, Clear, Random, and patterns are disabled during playback. Playback stops when no living cells remain; still lifes and repeating patterns continue until stopped. Browser scheduling can reduce the actual speed, especially in background tabs. Refreshing the page starts a new empty board.
 
-The simulation stops automatically when no live cells remain. Still lifes and repeating patterns continue running until you press Stop.
+## Rules and defaults
 
-## Rules
+Each cell has eight neighbors, including diagonals. All cells update simultaneously:
 
-Each cell has eight neighbors, including diagonals. At every generation, all cells update together:
-
-- A live cell survives with two or three live neighbors.
-- A dead cell becomes alive with exactly three live neighbors.
+- A living cell survives with two or three living neighbors.
+- A dead cell becomes alive with exactly three living neighbors.
 - All other cells are dead in the next generation.
 
-The grid wraps at every edge: cells on opposite sides are neighbors.
+The 60 × 40 grid wraps at every edge, matching the Python version. The initial speed is 8 generations per second. The browser version adds touch input, keyboard grid editing, sample patterns, and a live population count.
 
-Try placing three live cells in a horizontal row away from the edges, then press **Forward**. This pattern, called a blinker, alternates between horizontal and vertical rows.
+## Repository layout
 
-## Defaults and customization
+```text
+index.html                       Primary browser application
+.nojekyll                        Static GitHub Pages marker
+tests/life.test.cjs               Rule and playback regression tests
+archive/python-v1/GameOfLife.py   Original Python/Tkinter application
+archive/python-v1/README.md       Original Python documentation
+```
 
-The constants at the top of [GameOfLife.py](GameOfLife.py) control the board size, colors, and speed limits:
+The constants, `nextGeneration` function, patterns, drawing code, and controls are in `index.html`. Developers with Node.js installed can run `node --test tests/life.test.cjs`; Node.js is not needed to play.
 
-| Setting | Default |
-| --- | --- |
-| Grid width | 60 cells |
-| Grid height | 40 cells |
-| Cell size | 12 pixels |
-| Live cell color | Blue (`#1f77b4`) |
-| Dead cell color | Light gray (`#f0f0f0`) |
-| Initial speed | 8 generations per second |
-| Speed range | 1–25 generations per second |
+## Archived Python version
 
-Actual animation speed depends on the time needed to calculate and draw each generation.
+The Python source and original README are preserved byte-for-byte. To run the desktop version, use Python 3.6 or newer with Tkinter and a graphical desktop session:
 
-## Code layout
+```sh
+cd archive/python-v1
+python GameOfLife.py
+```
 
-All application code lives in `GameOfLife.py`. The `GameOfLifeApp` class manages the grid, neighbor counting, generation updates, Tkinter interface, and animation loop. Running the script creates the application and opens its window.
+See the [archived README](archive/python-v1/README.md) for its requirements and controls; its paths are relative to the archive folder. Existing Git history, including the original source at commit `f711dd5b4e91a818b7dc239bbe32463dafca0068`, is retained.
